@@ -1,7 +1,5 @@
 import streamlit as st
-import pandas as pd
-import numpy_financial as npf
-from io import BytesIO
+
 from modules.amortizacion import generar_amortizacion
 from modules.evaluacion import evaluar_proyecto
 from modules.reporte_excel import generar_reporte_excel
