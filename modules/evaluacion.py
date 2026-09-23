@@ -5,7 +5,7 @@ import numpy_financial as npf
 def evaluar_proyecto(
     monto_proyecto,
     aporte_propio,
-    flujo_operativo,
+    flujo_operativo_mensual,
     horizonte_meses,
     mes_inicio_operaciones,
     tasa_descuento,
@@ -40,15 +40,9 @@ def evaluar_proyecto(
         horizonte_meses + 1
     ):
 
-        if mes < mes_inicio_operaciones:
-
-            flujo_mes_economico = 0
-
-        else:
-
-            flujo_mes_economico = (
-                flujo_operativo
-            )
+        flujo_mes_economico = (
+            flujo_operativo_mensual[mes]
+        )
 
         flujo_economico.append(
             flujo_mes_economico
@@ -91,15 +85,9 @@ def evaluar_proyecto(
             )
         )
 
-        if mes < mes_inicio_operaciones:
-
-            flujo_operativo_mes = 0
-
-        else:
-
-            flujo_operativo_mes = (
-                flujo_operativo
-            )
+        flujo_operativo_mes = (
+            flujo_operativo_mensual[mes]
+        )
 
         flujo_mes_financiero = (
             flujo_operativo_mes
