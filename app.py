@@ -3,6 +3,7 @@ import streamlit as st
 from modules.amortizacion import generar_amortizacion
 from modules.evaluacion import evaluar_proyecto
 from modules.reporte_excel import generar_reporte_excel
+from modules.ingresos import generar_ingresos
 
 st.set_page_config(
     page_title="Evaluador de Proyectos BI-SMARK",
@@ -104,12 +105,93 @@ costos_variables = st.number_input(
     step=100.0
 )
 
-ingresos = st.number_input(
-    "Ingresos mensuales estimados",
-    min_value=0.0,
-    value=9000.0,
-    step=100.0
+st.markdown("### Ingresos")
+
+numero_productos = st.number_input(
+    "Número de productos o servicios",
+    min_value=1,
+    max_value=10,
+    value=1,
+    step=1
 )
+
+productos = []
+
+for i in range(
+    int(numero_productos)
+):
+
+    st.markdown(
+        f"#### Producto / Servicio {i + 1}"
+    )
+
+    col_ing1, col_ing2 = st.columns(2)
+
+    nombre = col_ing1.text_input(
+        "Nombre",
+        value=f"Producto {i + 1}",
+        key=f"nombre_producto_{i}"
+    )
+
+    precio_unitario = (
+        col_ing2.number_input(
+            "Precio unitario",
+            min_value=0.0,
+            value=100.0,
+            step=1.0,
+            key=f"precio_producto_{i}"
+        )
+    )
+
+    col_ing3, col_ing4 = st.columns(2)
+
+    unidades_mensuales = (
+        col_ing3.number_input(
+            "Unidades mensuales",
+            min_value=0.0,
+            value=90.0,
+            step=1.0,
+            key=f"unidades_producto_{i}"
+        )
+    )
+
+    mes_inicio_producto = (
+        col_ing4.number_input(
+            "Mes de inicio de ventas",
+            min_value=int(
+                mes_inicio_operaciones
+            ),
+            value=int(
+                mes_inicio_operaciones
+            ),
+            step=1,
+            key=f"inicio_producto_{i}"
+        )
+    )
+
+    crecimiento_anual = (
+        st.number_input(
+            "Crecimiento anual esperado (%)",
+            min_value=-100.0,
+            value=0.0,
+            step=1.0,
+            key=f"crecimiento_producto_{i}"
+        )
+    )
+
+    productos.append(
+        {
+            "nombre": nombre,
+            "precio_unitario":
+                precio_unitario,
+            "unidades_mensuales":
+                unidades_mensuales,
+            "mes_inicio":
+                mes_inicio_producto,
+            "crecimiento_anual":
+                crecimiento_anual
+        }
+    )
 
 st.subheader("Evaluación")
 
@@ -148,7 +230,18 @@ if st.button("Calcular proyecto"):
     # CÁLCULOS INICIALES
     # --------------------------------------------------
 
-    aporte_propio = monto_proyecto - monto_financiado
+    aporte_propio = (
+        monto_proyecto
+        - monto_financiado
+    )
+
+    # Ingreso mensual base.
+    # Se conserva para resumen y reporte.
+    ingresos = sum(
+        producto["precio_unitario"]
+        * producto["unidades_mensuales"]
+        for producto in productos
+    )
 
     flujo_operativo = (
         ingresos
@@ -173,6 +266,49 @@ if st.button("Calcular proyecto"):
         horizonte_meses = horizonte_proyecto * 12
     else:
         horizonte_meses = horizonte_proyecto
+
+    # --------------------------------------------------
+    # PROYECCIÓN DE INGRESOS
+    # --------------------------------------------------
+
+    ingresos_mensuales, df_ingresos = (
+        generar_ingresos(
+            productos=productos,
+            horizonte_meses=horizonte_meses
+        )
+    )
+
+    # --------------------------------------------------
+    # FLUJO OPERATIVO MENSUAL
+    # --------------------------------------------------
+
+    flujo_operativo_mensual = [
+        0.0
+        for _ in range(
+            horizonte_meses + 1
+        )
+    ]
+
+    for mes in range(
+        1,
+        horizonte_meses + 1
+    ):
+
+        if mes < mes_inicio_operaciones:
+
+            flujo_operativo_mensual[
+                mes
+            ] = 0
+
+        else:
+
+            flujo_operativo_mensual[
+                mes
+            ] = (
+                ingresos_mensuales[mes]
+                - costos_fijos
+                - costos_variables
+            )
 
     # Validar que el inicio de operaciones
     # esté dentro del horizonte del proyecto
@@ -306,7 +442,7 @@ if st.button("Calcular proyecto"):
     resultados = evaluar_proyecto(
         monto_proyecto=monto_proyecto,
         aporte_propio=aporte_propio,
-        flujo_operativo=flujo_operativo,
+        flujo_operativo_mensual=flujo_operativo_mensual,
         horizonte_meses=horizonte_meses,
         mes_inicio_operaciones=mes_inicio_operaciones,
         tasa_descuento=tasa_descuento,
