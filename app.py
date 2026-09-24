@@ -4,6 +4,7 @@ from modules.amortizacion import generar_amortizacion
 from modules.evaluacion import evaluar_proyecto
 from modules.reporte_excel import generar_reporte_excel
 from modules.ingresos import generar_ingresos
+from modules.costos import generar_costos
 
 st.set_page_config(
     page_title="Evaluador de Proyectos BI-SMARK",
@@ -89,20 +90,6 @@ mes_inicio_operaciones = st.number_input(
     value=1,
     step=1,
     help="Mes en el que el proyecto comienza a generar ingresos y costos operativos."
-)
-
-costos_fijos = st.number_input(
-    "Costos fijos mensuales",
-    min_value=0.0,
-    value=2000.0,
-    step=100.0
-)
-
-costos_variables = st.number_input(
-    "Costos variables mensuales",
-    min_value=0.0,
-    value=3500.0,
-    step=100.0
 )
 
 st.markdown("### Ingresos")
@@ -193,6 +180,102 @@ for i in range(
         }
     )
 
+st.markdown("### Costos")
+
+# --------------------------------------------------
+# COSTOS FIJOS
+# --------------------------------------------------
+
+st.markdown("#### Costos fijos")
+
+numero_costos_fijos = st.number_input(
+    "Número de costos fijos",
+    min_value=1,
+    max_value=10,
+    value=1,
+    step=1
+)
+
+costos_fijos_detalle = []
+
+for i in range(
+    int(numero_costos_fijos)
+):
+
+    col_cf1, col_cf2 = st.columns(2)
+
+    nombre_costo = col_cf1.text_input(
+        "Concepto",
+        value=(
+            "Arriendo"
+            if i == 0
+            else f"Costo fijo {i + 1}"
+        ),
+        key=f"nombre_costo_fijo_{i}"
+    )
+
+    monto_costo = col_cf2.number_input(
+        "Monto mensual",
+        min_value=0.0,
+        value=2000.0 if i == 0 else 0.0,
+        step=100.0,
+        key=f"monto_costo_fijo_{i}"
+    )
+
+    costos_fijos_detalle.append(
+        {
+            "nombre": nombre_costo,
+            "monto": monto_costo
+        }
+    )
+
+# --------------------------------------------------
+# NÓMINA
+# --------------------------------------------------
+
+st.markdown("#### Nómina")
+
+nomina_mensual = st.number_input(
+    "Costo mensual total de nómina",
+    min_value=0.0,
+    value=0.0,
+    step=100.0,
+    help=(
+        "Por ahora se ingresa como un valor mensual total. "
+        "Más adelante podrá detallarse por empleados, "
+        "sueldos y beneficios."
+    )
+)
+
+# --------------------------------------------------
+# COSTOS VARIABLES
+# --------------------------------------------------
+
+st.markdown("#### Costos variables por producto")
+
+costos_variables_unitarios = []
+
+for i, producto in enumerate(
+    productos
+):
+
+    costo_variable_unitario = (
+        st.number_input(
+            (
+                "Costo variable unitario - "
+                f"{producto['nombre']}"
+            ),
+            min_value=0.0,
+            value=0.0,
+            step=0.10,
+            key=f"costo_variable_{i}"
+        )
+    )
+
+    costos_variables_unitarios.append(
+        costo_variable_unitario
+    )
+
 st.subheader("Evaluación")
 
 horizonte_proyecto = st.number_input(
@@ -243,6 +326,24 @@ if st.button("Calcular proyecto"):
         for producto in productos
     )
 
+    # Costos mensuales base.
+    # Se conservan para resumen y reporte.
+    costos_fijos = (
+        sum(
+            costo["monto"]
+            for costo in costos_fijos_detalle
+        )
+        + nomina_mensual
+    )
+
+    costos_variables = sum(
+        producto["unidades_mensuales"]
+        * costos_variables_unitarios[i]
+        for i, producto in enumerate(
+            productos
+        )
+    )
+
     flujo_operativo = (
         ingresos
         - costos_fijos
@@ -279,6 +380,27 @@ if st.button("Calcular proyecto"):
     )
 
     # --------------------------------------------------
+    # PROYECCIÓN DE COSTOS
+    # --------------------------------------------------
+
+    (
+        costos_mensuales,
+        costos_fijos_mensuales,
+        costos_variables_mensuales,
+        nomina_mensual_proyectada,
+        df_costos
+    ) = generar_costos(
+        productos=productos,
+        costos_fijos_detalle=costos_fijos_detalle,
+        nomina_mensual=nomina_mensual,
+        costos_variables_unitarios=
+            costos_variables_unitarios,
+        horizonte_meses=horizonte_meses,
+        mes_inicio_operaciones=
+            mes_inicio_operaciones
+    )
+
+    # --------------------------------------------------
     # FLUJO OPERATIVO MENSUAL
     # --------------------------------------------------
 
@@ -294,21 +416,12 @@ if st.button("Calcular proyecto"):
         horizonte_meses + 1
     ):
 
-        if mes < mes_inicio_operaciones:
-
-            flujo_operativo_mensual[
-                mes
-            ] = 0
-
-        else:
-
-            flujo_operativo_mensual[
-                mes
-            ] = (
-                ingresos_mensuales[mes]
-                - costos_fijos
-                - costos_variables
-            )
+        flujo_operativo_mensual[
+            mes
+        ] = (
+            ingresos_mensuales[mes]
+            - costos_mensuales[mes]
+        )
 
     # Validar que el inicio de operaciones
     # esté dentro del horizonte del proyecto
